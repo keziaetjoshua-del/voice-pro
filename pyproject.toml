@@ -42,7 +42,7 @@ dependencies = [
     "huggingface-hub>=1.2,<2",  # required by gradio 6
     "cached_path",
     # translation / subtitles
-    "edge-tts>=7.2.8",
+    "edge-tts>=7.3.1,<8",
     "python-iso639",
     "deep-translator",
     "pysubs2",
