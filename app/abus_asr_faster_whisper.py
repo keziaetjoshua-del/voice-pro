@@ -216,12 +216,41 @@ class FasterWhisperInference:
         self.current_compute_type = compute_type
         
         
+        download_root = os.path.join("model", "faster-whisper")
+        model_path = self._download_model_robust(model_size, download_root, progress)
+
         self.model = faster_whisper.WhisperModel(
             device=self.device,
-            model_size_or_path=model_size,
-            download_root=os.path.join("model", "faster-whisper"),
+            model_size_or_path=model_path,
+            download_root=download_root,
             compute_type=self.current_compute_type
         )
+
+
+    @staticmethod
+    def _download_model_robust(model_size: str, download_root: str, progress=None, attempts: int = 6):
+        """
+        Télécharge le modèle Whisper un fichier à la fois, avec reprises.
+        faster-whisper ouvre 8 connexions en parallèle vers Hugging Face ; sur certaines connexions
+        (box, antivirus) elles sont coupées (WinError 10054 / Server disconnected).
+        Renvoie le dossier local du modèle, ou le nom d'origine si ce n'est pas un modèle connu.
+        """
+        repo_id = getattr(faster_whisper.utils, "_MODELS", {}).get(model_size)
+        if repo_id is None:
+            return model_size
+        from huggingface_hub import snapshot_download
+        allow_patterns = ["config.json", "preprocessor_config.json", "model.bin", "tokenizer.json", "vocabulary.*"]
+        last_error = None
+        for attempt in range(1, attempts + 1):
+            try:
+                if progress is not None:
+                    progress(0, desc=f"Downloading Whisper model ({attempt}/{attempts})...")
+                return snapshot_download(repo_id, cache_dir=download_root, allow_patterns=allow_patterns, max_workers=1)
+            except Exception as e:
+                last_error = e
+                logger.warning(f"[abus_asr_faster_whisper.py] _download_model_robust - attempt {attempt} failed: {e}")
+                time.sleep(min(5 * attempt, 30))
+        raise last_error
         
 
 
