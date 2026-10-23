@@ -95,7 +95,9 @@ def gulliver_tab(user_config: UserConfig):
                 with gr.Group():
                     french_lines_textbox = gr.Textbox(label=i18n("Translated text, one sentence per line"), lines=6, max_lines=20,
                                                       placeholder=i18n("Paste the translation here: same number of lines as the subtitles on the left"))
-                    align_button = gr.Button(value=i18n("Place on the original timings"), variant="secondary")
+                    with gr.Row():
+                        extract_button = gr.Button(value=i18n("1. Extract the original text"), variant="secondary")
+                        align_button = gr.Button(value=i18n("2. Place on the original timings"), variant="secondary")
                 with gr.Group():
                     dub_timing_radio = gr.Radio(label=i18n("Timing"),
                                                 choices=[(i18n("Meditation (no drift)"), "meditation"), (i18n("Original Voice-Pro"), "legacy")],
@@ -291,6 +293,9 @@ def gulliver_tab(user_config: UserConfig):
 
 
     # Méditation : alignement du texte traduit et réglages de timing / mixage
+    extract_button.click(gulliver.gradio_extract_source_lines,
+                         inputs=[transcription_textbox],
+                         outputs=[french_lines_textbox])
     align_button.click(gulliver.gradio_align_translation,
                        inputs=[transcription_textbox, french_lines_textbox],
                        outputs=[translation_textbox])

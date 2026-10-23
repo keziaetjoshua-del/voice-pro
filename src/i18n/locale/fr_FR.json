@@ -51,8 +51,7 @@
     "🗂️ Open workspace folder": "🗂️ Dossier des résultats",
     "Meditation: timing & mix": "🧘 Méditation : rythme et mixage",
     "Translated text, one sentence per line": "Texte traduit, une phrase par ligne",
-    "Paste the translation here: same number of lines as the subtitles on the left": "Colle ici la traduction : autant de lignes que de sous-titres à gauche",
-    "Place on the original timings": "Poser sur les timings d'origine",
+    "Paste the translation here: same number of lines as the subtitles on the left": "Clique sur 1, copie ces lignes dans DeepL, puis remplace-les ici par la traduction (même nombre de lignes) et clique sur 2",
     "Timing": "Placement des phrases",
     "Meditation (no drift)": "Méditation (sans dérive)",
     "Original Voice-Pro": "Voice-Pro d'origine",
@@ -70,5 +69,7 @@
     "Paste the translated text first, one sentence per line.": "Colle d'abord le texte traduit, une phrase par ligne.",
     "Line count mismatch": "Nombre de lignes différent",
     "subtitles": "sous-titres",
-    "translated lines": "lignes traduites"
+    "translated lines": "lignes traduites",
+    "1. Extract the original text": "1. Extraire le texte d'origine",
+    "2. Place on the original timings": "2. Poser sur les timings d'origine"
 }

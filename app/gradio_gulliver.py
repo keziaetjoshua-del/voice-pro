@@ -278,6 +278,14 @@ class GradioGulliver:
         """Piste de fond sans voix fournie par l'utilisateur (non mémorisée entre deux sessions)."""
         self.dub_bed_file = bed_file if bed_file else None
 
+    def gradio_extract_source_lines(self, source_srt):
+        """Texte d'origine sans les timings, une phrase (un sous-titre) par ligne, à traduire ailleurs (DeepL...)."""
+        source_srt = (source_srt or "").strip()
+        if not source_srt or not self._is_subtitle_format(source_srt):
+            raise gr.Error(i18n("First transcribe the audio: the subtitles on the left must contain timings."), duration=None)
+        subs = pysubs2.SSAFile.from_string(source_srt)
+        return "\n".join(" ".join(e.plaintext.split()) for e in subs if e.text.strip())
+
     def gradio_align_translation(self, source_srt, translated_lines):
         """Pose un texte traduit (une phrase par ligne) sur les timings des sous-titres d'origine."""
         source_srt = (source_srt or "").strip()
