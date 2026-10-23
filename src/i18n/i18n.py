@@ -28,9 +28,13 @@ class I18nAuto:
                 0
             ]  # getlocale can't identify the system's language ((None, None))
             
-        json_path = os.path.join(Path(__file__).resolve().parent, f"locale/{language}.json")            
+        locale_dir = os.path.join(Path(__file__).resolve().parent, "locale")
+        json_path = os.path.join(locale_dir, f"{language}.json")
         if not os.path.exists(json_path):
-            language = "en_US"
+            # fr_BE, fr_CH... -> fr_FR : même langue, autre pays
+            prefix = (language or "").split("_")[0]
+            same_language = sorted(f[:-5] for f in os.listdir(locale_dir) if f.startswith(prefix + "_") and f.endswith(".json")) if prefix else []
+            language = same_language[0] if same_language else "en_US"
         self.language = language
         self.language_map = load_language_list(language)
 

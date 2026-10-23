@@ -84,7 +84,13 @@ class UserConfig:
             "vsr_scale": 2,
             "compression_enable": True,
             "compression_crf": 23,
-            "compression_preset": "medium"            
+            "compression_preset": "medium",
+            "dub_timing_mode": "meditation",
+            "dub_max_speedup": 1.10,
+            "dub_breath_gap_ms": 250,
+            "dub_demucs_model": "htdemucs_ft",
+            "dub_voice_gain_db": 0.0,
+            "dub_bed_gain_db": 0.0,
             }
         self.user_config = self.load_user_config()
 

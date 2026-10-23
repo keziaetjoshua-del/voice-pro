@@ -63,7 +63,7 @@ def ffmpeg_codec_type(input_path: str):
     command = [
         'ffprobe',
         '-loglevel', 'error',
-        '-show_entries', 'stream=codec_type',
+        '-show_entries', 'stream=codec_type:stream_disposition=attached_pic',
         '-of', 'json',
         input_path_encoded
     ]
@@ -84,6 +84,9 @@ def ffmpeg_codec_type(input_path: str):
         if "streams" in data:
             for stream in data["streams"]:
                 if stream["codec_type"] == "video":
+                    # Une pochette d'album (FLAC/MP3 avec image intégrée) n'est pas une vidéo
+                    if stream.get("disposition", {}).get("attached_pic", 0) == 1:
+                        continue
                     has_video = True
                 elif stream["codec_type"] == "audio":
                     has_audio = True
@@ -185,6 +188,44 @@ def ffmpeg_mix_audio(audio_path1: str, audio_path2: str, output_path: str, audio
     command = f'ffmpeg -y -i "{audio_path1}" -i "{audio_path2}" -filter_complex "{filter_complex}" {encoding_options} "{output_path}" -nostdin'
     logger.debug(f'[abus:ffmpeg_mix_audio] {command}')
     os.system(command)
+
+
+
+def ffmpeg_mix_dub(voice_path: str, bed_path: str, output_path: str,
+                   voice_gain_db: float = 0.0, bed_gain_db: float = 0.0, audio_format: str = "flac") -> bool:
+    """
+    Mixe la voix doublée sur le fond sonore, pensé pour les méditations :
+      * pas de normalisation automatique (amix normalize=0) : l'ancien mixage
+        baissait voix ET fond de 6 dB chacun ;
+      * le fond reste en stéréo d'origine (binaural, spatialisation) ;
+      * la voix (mono ou stéréo) est centrée ;
+      * durée finale = la plus longue des deux pistes (donc celle du morceau d'origine) ;
+      * un limiteur doux évite la saturation quand on remonte les volumes.
+    """
+    filter_complex = (
+        f"[0:a]aresample=48000,aformat=channel_layouts=stereo,volume={voice_gain_db}dB[v];"
+        f"[1:a]aresample=48000,aformat=channel_layouts=stereo,volume={bed_gain_db}dB[b];"
+        f"[v][b]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.97:level=false[out]"
+    )
+    encoding_options = ["-c:a", "pcm_s24le"]
+    if audio_format == "flac":
+        encoding_options = ["-c:a", "flac", "-sample_fmt", "s32", "-compression_level", "5"]
+    elif audio_format == "mp3":
+        encoding_options = ["-c:a", "libmp3lame", "-b:a", "320k"]
+    elif audio_format == "ogg":
+        encoding_options = ["-c:a", "libvorbis", "-qscale:a", "8"]
+
+    command = ["ffmpeg", "-y", "-nostdin", "-loglevel", "error",
+               "-i", voice_path, "-i", bed_path,
+               "-filter_complex", filter_complex, "-map", "[out]",
+               "-ar", "48000", "-ac", "2", *encoding_options, output_path]
+    logger.debug(f'[abus:ffmpeg_mix_dub] {" ".join(command)}')
+    try:
+        subprocess.run(command, check=True, capture_output=True, text=True)
+        return os.path.exists(output_path)
+    except subprocess.CalledProcessError as e:
+        logger.error(f'[abus:ffmpeg_mix_dub] error: {e.stderr}')
+        return False
 
 
 
