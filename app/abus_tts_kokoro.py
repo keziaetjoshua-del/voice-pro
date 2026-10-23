@@ -25,6 +25,7 @@ from phonemizer.backend.espeak.wrapper import EspeakWrapper
 
 
 import structlog
+from app.abus_dub_timeline import build_dub_timeline
 logger = structlog.get_logger()
 
 
@@ -130,35 +131,10 @@ class KokoroTTS:
         full_subs = pysubs2.load(tts_subtitle_file, encoding="utf-8")
         subs = full_subs
         
-        combined_audio = AudioSegment.empty()
-        for i in progress.tqdm(range(len(subs)), desc='Generating...'):
-            line = subs[i]
-            next_line = subs[i+1] if i < len(subs)-1 else None
-            
-            if i == 0:
-                silence = AudioSegment.silent(duration=line.start)
-                combined_audio += silence   
-
-            tts_segment_file = os.path.join(segments_folder, f'tts_{i+1}.{audio_format}')
-            tts_result = self.request_tts(line.text, tts_segment_file, kokoro_voice, speed_factor, audio_format)
-
-            if tts_result == False:
-                if next_line:
-                    silence = AudioSegment.silent(duration=next_line.start-line.start)
-                    combined_audio += silence
-                continue        
-            
-            combined_audio += AudioSegment.from_file(tts_segment_file)
-
-            if next_line and len(combined_audio) < next_line.start:
-                silence_length = next_line.start - len(combined_audio)
-                silence = AudioSegment.silent(duration=silence_length)
-                combined_audio += silence
-            elif next_line:
-                next_line.start = len(combined_audio)
-                next_line.end = next_line.start + (next_line.end - next_line.start)
-                
-        combined_audio.export(output_file, format=audio_format)                 
+        # Placement des phrases : voir app/abus_dub_timeline.py (mode méditation sans dérive)
+        build_dub_timeline(subs,
+                           lambda text, segment_file: self.request_tts(text, segment_file, kokoro_voice, speed_factor, audio_format),
+                           segments_folder, output_file, audio_format, progress)
         cmd_delete_file(tts_subtitle_file)    
         
     

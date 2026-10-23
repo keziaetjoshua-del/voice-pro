@@ -8,6 +8,7 @@ from app.abus_downloader import *
 from app.abus_path import *
 from app.abus_ffmpeg import *
 from app.abus_demucs import *
+from app.abus_dub_timeline import *
 from app.abus_genuine import *
 from app.abus_files import *
 
@@ -240,6 +241,78 @@ class GradioGulliver:
         return inst_audio_file, vocal_audio_file   
 
 
+    # Doublage « méditation » : réglages, fond sonore, mixage
+    def _apply_dub_options(self):
+        set_dub_options(
+            timing_mode=self.user_config.get("dub_timing_mode", "meditation"),
+            max_speedup=self.user_config.get("dub_max_speedup", 1.10),
+            breath_gap_ms=self.user_config.get("dub_breath_gap_ms", 250),
+        )
+
+    def _dub_bed(self, source_audio_file):
+        """Fond sonore à placer sous la voix : piste fournie, sinon séparation Demucs (mise en cache)."""
+        bed_file = getattr(self, "dub_bed_file", None)
+        if bed_file and os.path.exists(bed_file):
+            logger.debug(f"[gradio_gulliver.py] _dub_bed - piste de fond fournie : {bed_file}")
+            return bed_file
+
+        model = self.user_config.get("dub_demucs_model", "htdemucs_ft")
+        if model == "none":
+            return None
+
+        if not hasattr(self, "_bed_cache"):
+            self._bed_cache = {}
+        key = (source_audio_file, model)
+        cached = self._bed_cache.get(key)
+        if cached and os.path.exists(cached):
+            return cached
+
+        if model == "htdemucs":
+            inst_audio_file, _ = self._demucs_htdemucs(source_audio_file)
+        else:
+            inst_audio_file, _ = self._demucs_htdemucs_ft(source_audio_file)
+        self._bed_cache[key] = inst_audio_file
+        return inst_audio_file
+
+    def gradio_set_bed_file(self, bed_file):
+        """Piste de fond sans voix fournie par l'utilisateur (non mémorisée entre deux sessions)."""
+        self.dub_bed_file = bed_file if bed_file else None
+
+    def gradio_align_translation(self, source_srt, translated_lines):
+        """Pose un texte traduit (une phrase par ligne) sur les timings des sous-titres d'origine."""
+        source_srt = (source_srt or "").strip()
+        lines = [l.strip() for l in (translated_lines or "").splitlines() if l.strip()]
+        if not source_srt or not self._is_subtitle_format(source_srt):
+            raise gr.Error(i18n("First transcribe the audio: the subtitles on the left must contain timings."), duration=None)
+        if not lines:
+            raise gr.Error(i18n("Paste the translated text first, one sentence per line."), duration=None)
+
+        subs = pysubs2.SSAFile.from_string(source_srt)
+        events = [e for e in subs if e.text.strip()]
+        if len(lines) != len(events):
+            raise gr.Error(f"{i18n('Line count mismatch')} : {len(events)} {i18n('subtitles')} / {len(lines)} {i18n('translated lines')}",
+                           duration=None)
+        for event, line in zip(events, lines):
+            event.text = line
+        return subs.to_string("srt")
+
+    def _mix_dub(self, aidub_audio_file, source_audio_file, mixed_audio_file, audio_format):
+        bed = self._dub_bed(source_audio_file)
+        voice_gain = float(self.user_config.get("dub_voice_gain_db", 0.0))
+        bed_gain = float(self.user_config.get("dub_bed_gain_db", 0.0))
+        if bed:
+            ok = ffmpeg_mix_dub(aidub_audio_file, bed, mixed_audio_file, voice_gain, bed_gain, audio_format)
+        else:
+            ok = False
+        if not ok:
+            # Pas de fond (ou échec du mixage) : on livre la voix seule, au bon format
+            ffmpeg_convert_audio(aidub_audio_file, mixed_audio_file, audio_format)
+
+        report = format_report(get_last_report())
+        if report:
+            gr.Info(report.replace("\n", " — "), duration=15)
+
+
     # Translate
     def gradio_translate_languages(self):
         return self.translator.get_languages()
@@ -340,6 +413,7 @@ class GradioGulliver:
                     voice_name = {voice_name}, \
                     semitones = {semitones}, speed_factor = {speed_factor}, volume_factor = {volume_factor}, audio_format = {audio_format}")
         
+        self._apply_dub_options()
         if len(translation_text) < 1:
             logger.warning(f"[gradio_gulliver.py] gradio_edge_dubbing - no actions")
             return None, None, self.fm.get_all_files() 
@@ -388,8 +462,7 @@ class GradioGulliver:
 
             # Mix
             mixed_audio_file = path_add_postfix(source_audio_file, f"_mixed_{target_language}")            
-            denoise_inst_path, _ = self._denoise(source_audio_file, 1)
-            ffmpeg_mix_audio(aidub_audio_file, denoise_inst_path, mixed_audio_file, 0, 0, audio_format)
+            self._mix_dub(aidub_audio_file, source_audio_file, mixed_audio_file, audio_format)
                                 
             if self.has_video:
                 source_video_file = self.fm.get_split("Source.video")
@@ -428,8 +501,7 @@ class GradioGulliver:
         
             # Mix
             mixed_audio_file = path_add_postfix(source_audio_file, f"_mixed_{target_language}")            
-            denoise_inst_path, _ = self._denoise(source_audio_file, 1)
-            ffmpeg_mix_audio(aidub_audio_file, denoise_inst_path, mixed_audio_file, 0, 0, audio_format)
+            self._mix_dub(aidub_audio_file, source_audio_file, mixed_audio_file, audio_format)
                                 
             if self.has_video:
                 source_video_file = self.fm.get_split("Source.video")
@@ -465,6 +537,7 @@ class GradioGulliver:
                     celeb_name = {celeb_name}, celeb_audio = {celeb_audio}, \
                     model_choice = {model_choice}, speed_factor = {speed_factor}, audio_format = {audio_format}")
         
+        self._apply_dub_options()
         if len(translation_text) < 1:
             logger.warning(f"[gradio_gulliver.py] gradio_f5_dubbing_single - no actions")
             return None, None, self.fm.get_all_files() 
@@ -506,8 +579,7 @@ class GradioGulliver:
             
             # Mix
             mixed_audio_file = path_add_postfix(source_audio_file, f"_mixed_{celeb_name}")            
-            denoise_inst_path, _ = self._denoise(source_audio_file, 1)
-            ffmpeg_mix_audio(aidub_audio_file, denoise_inst_path, mixed_audio_file, 0, 0, audio_format)
+            self._mix_dub(aidub_audio_file, source_audio_file, mixed_audio_file, audio_format)
             self.fm.set_dubbing(f'{celeb_name}.audio', aidub_audio_file)
                                 
             if self.has_video:
@@ -534,6 +606,7 @@ class GradioGulliver:
                         translation_text, 
                         celeb_name, celeb_audio, celeb_transcript, 
                         mode_choice, speed_factor, audio_format: str):
+        self._apply_dub_options()
         if len(translation_text) < 1:
             logger.warning(f"[gradio_gulliver.py] gradio_f5_dubbing_single - no actions")
             return None, None, self.fm.get_all_files() 
@@ -575,8 +648,7 @@ class GradioGulliver:
             
             # Mix
             mixed_audio_file = path_add_postfix(source_audio_file, f"_mixed_{celeb_name}")            
-            denoise_inst_path, _ = self._denoise(source_audio_file, 1)
-            ffmpeg_mix_audio(aidub_audio_file, denoise_inst_path, mixed_audio_file, 0, 0, audio_format)
+            self._mix_dub(aidub_audio_file, source_audio_file, mixed_audio_file, audio_format)
             self.fm.set_dubbing(f'{celeb_name}.audio', aidub_audio_file)
                                 
             if self.has_video:
@@ -608,6 +680,7 @@ class GradioGulliver:
                     language_name = {language_name}, voice_name = {voice_name}, \
                     speed_factor = {speed_factor}, audio_format = {audio_format}")
         
+        self._apply_dub_options()
         if len(translation_text) < 1:
             logger.warning(f"[gradio_gulliver.py] gradio_kokoro_dubbing - no actions")
             return None, None, self.fm.get_all_files() 
@@ -654,8 +727,7 @@ class GradioGulliver:
 
             # Mix
             mixed_audio_file = path_add_postfix(source_audio_file, f"_mixed_{voice_name}")            
-            denoise_inst_path, _ = self._denoise(source_audio_file, 1)
-            ffmpeg_mix_audio(aidub_audio_file, denoise_inst_path, mixed_audio_file, 0, 0, audio_format)
+            self._mix_dub(aidub_audio_file, source_audio_file, mixed_audio_file, audio_format)
                                 
             if self.has_video:
                 source_video_file = self.fm.get_split("Source.video")
@@ -694,8 +766,7 @@ class GradioGulliver:
         
             # Mix
             mixed_audio_file = path_add_postfix(source_audio_file, f"_mixed_{voice_name}")            
-            denoise_inst_path, _ = self._denoise(source_audio_file, 1)
-            ffmpeg_mix_audio(aidub_audio_file, denoise_inst_path, mixed_audio_file, 0, 0, audio_format)
+            self._mix_dub(aidub_audio_file, source_audio_file, mixed_audio_file, audio_format)
                                 
             if self.has_video:
                 source_video_file = self.fm.get_split("Source.video")

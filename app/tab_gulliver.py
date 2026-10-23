@@ -91,6 +91,30 @@ def gulliver_tab(user_config: UserConfig):
                 language_detection_button = gr.Button(value=i18n("Language Detection"))                    
                 translate_button = gr.Button(value=i18n("Translate"), variant="primary")              
             
+            with gr.Accordion(i18n("Meditation: timing & mix"), open=True):
+                with gr.Group():
+                    french_lines_textbox = gr.Textbox(label=i18n("Translated text, one sentence per line"), lines=6, max_lines=20,
+                                                      placeholder=i18n("Paste the translation here: same number of lines as the subtitles on the left"))
+                    align_button = gr.Button(value=i18n("Place on the original timings"), variant="secondary")
+                with gr.Group():
+                    dub_timing_radio = gr.Radio(label=i18n("Timing"),
+                                                choices=[(i18n("Meditation (no drift)"), "meditation"), (i18n("Original Voice-Pro"), "legacy")],
+                                                value=user_config.get("dub_timing_mode", "meditation"))
+                    dub_speedup_slider = gr.Slider(1.0, 1.3, step=0.01, value=user_config.get("dub_max_speedup", 1.10),
+                                                   label=i18n("Max speed-up of a long sentence"), info=i18n("1.00 = never, 1.10 = up to 10 %"))
+                    dub_breath_slider = gr.Slider(0, 1500, step=50, value=user_config.get("dub_breath_gap_ms", 250),
+                                                  label=i18n("Minimum pause between sentences (ms)"))
+                with gr.Group():
+                    dub_bed_radio = gr.Radio(label=i18n("Background"),
+                                             choices=[(i18n("Demucs htdemucs_ft (best, slower)"), "htdemucs_ft"),
+                                                      (i18n("Demucs htdemucs (faster)"), "htdemucs"),
+                                                      (i18n("No background (voice only)"), "none")],
+                                             value=user_config.get("dub_demucs_model", "htdemucs_ft"))
+                    dub_bed_file = gr.File(label=i18n("Original background without voice (optional, replaces Demucs)"),
+                                           type="filepath", file_count="single", file_types=['audio'])
+                    dub_voice_gain = gr.Slider(-12, 12, step=0.5, value=user_config.get("dub_voice_gain_db", 0.0), label=i18n("Voice volume (dB)"))
+                    dub_bed_gain = gr.Slider(-24, 6, step=0.5, value=user_config.get("dub_bed_gain_db", 0.0), label=i18n("Background volume (dB)"))
+
             with gr.Group():
                 gr.HTML(f'<center><h4>{i18n("Speech Generation")}</h4></center>')
 
@@ -263,4 +287,17 @@ def gulliver_tab(user_config: UserConfig):
 
     kokoro_dubbing_button.click(gulliver.gradio_kokoro_dubbing, 
                 inputs=[translation_textbox, kokoro_language_dropdown, kokoro_voice_dropdown, kokoro_tts_speed, audio_format_radio], 
-                outputs=[dubbing_video, dubbing_audio, dubbing_files])                     
+                outputs=[dubbing_video, dubbing_audio, dubbing_files])
+
+
+    # Méditation : alignement du texte traduit et réglages de timing / mixage
+    align_button.click(gulliver.gradio_align_translation,
+                       inputs=[transcription_textbox, french_lines_textbox],
+                       outputs=[translation_textbox])
+    dub_timing_radio.change(lambda v: user_config.set("dub_timing_mode", v), inputs=[dub_timing_radio])
+    dub_speedup_slider.change(lambda v: user_config.set("dub_max_speedup", float(v)), inputs=[dub_speedup_slider])
+    dub_breath_slider.change(lambda v: user_config.set("dub_breath_gap_ms", int(v)), inputs=[dub_breath_slider])
+    dub_bed_radio.change(lambda v: user_config.set("dub_demucs_model", v), inputs=[dub_bed_radio])
+    dub_voice_gain.change(lambda v: user_config.set("dub_voice_gain_db", float(v)), inputs=[dub_voice_gain])
+    dub_bed_gain.change(lambda v: user_config.set("dub_bed_gain_db", float(v)), inputs=[dub_bed_gain])
+    dub_bed_file.change(gulliver.gradio_set_bed_file, inputs=[dub_bed_file])

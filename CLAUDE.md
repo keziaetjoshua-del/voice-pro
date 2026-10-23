@@ -8,7 +8,7 @@ Voice-Pro is a Gradio web application for AI-powered dubbing: it downloads/inges
 
 ## Running & environment
 
-There is no system-wide Python install and **no test suite**. The app runs inside a self-contained **uv-managed** environment under `installer_files/` (uv binary + project-local Python 3.12 + venv + cache), bootstrapped by the launcher scripts. Do not assume `python`/`pip` on PATH is the app's interpreter — the interpreter is `installer_files/env/Scripts/python.exe` (`bin/python` on POSIX).
+There is no system-wide Python install. A small test suite in `tests/` covers the meditation dubbing timeline and mix (`python -m pytest tests`, needs only pydub + ffmpeg). The app runs inside a self-contained **uv-managed** environment under `installer_files/` (uv binary + project-local Python 3.12 + venv + cache), bootstrapped by the launcher scripts. Do not assume `python`/`pip` on PATH is the app's interpreter — the interpreter is `installer_files/env/Scripts/python.exe` (`bin/python` on POSIX).
 
 - **Windows:** `configure.bat` (one-time, optional: installs git/ffmpeg via choco; CUDA Toolkit is NOT needed — torch wheels bundle the CUDA runtime), then `start.bat`. `update.bat` re-syncs deps, `uninstall.bat` removes (`uninstall.bat silent` for unattended). If ffmpeg is not on PATH, `start.bat` downloads a portable copy into `installer_files/ffmpeg/` — so on machines without admin rights nothing needs installing at all.
 - **macOS/Linux:** `configure.sh`, `start.sh`, `update.sh`, `uninstall.sh`.
@@ -57,6 +57,10 @@ The vendored `cosyvoice/` directory tracks upstream `FunAudioLLM/CosyVoice` main
 All paths are resolved relative to the current working directory (the repo root at launch): `workspace/` holds run outputs (subfolders timestamped per job), `model/` holds weights, `installer_files/gradio/` is Gradio temp. Use the `path_*` helpers rather than hardcoding paths, and `sanitize_filename` / `path_shorten` for user-derived names (Windows 260-char limit handling lives here).
 
 `third_party/Matcha-TTS` is manually appended to `sys.path` (required by CosyVoice) — preserve those `sys.path.append` lines when refactoring entry points.
+
+### Meditation dubbing (fork addition)
+
+All five TTS engines' `srt_to_voice` delegate sentence placement to `app/abus_dub_timeline.build_dub_timeline` (anchored placement, overflow absorbed into the next pause, capped `atempo` speed-up, no cumulative drift; `timing_mode="legacy"` restores the original behaviour). `GradioGulliver._mix_dub` replaces the six copies of the Demucs+mix code: background = user-supplied bed file, else cached Demucs (`dub_demucs_model`), mixed by `abus_ffmpeg.ffmpeg_mix_dub` (no amix normalization, stereo kept, dB gains). Settings are the `dub_*` keys in user config. User guide: `docs/MEDITATION_FR.md`.
 
 ## Conventions
 
