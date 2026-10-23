@@ -228,7 +228,7 @@ class FasterWhisperInference:
 
 
     @staticmethod
-    def _download_model_robust(model_size: str, download_root: str, progress=None, attempts: int = 6):
+    def _download_model_robust(model_size: str, download_root: str, progress=None, attempts: int = 8):
         """
         Télécharge le modèle Whisper un fichier à la fois, avec reprises.
         faster-whisper ouvre 8 connexions en parallèle vers Hugging Face ; sur certaines connexions
@@ -248,8 +248,17 @@ class FasterWhisperInference:
                 return snapshot_download(repo_id, cache_dir=download_root, allow_patterns=allow_patterns, max_workers=1)
             except Exception as e:
                 last_error = e
-                logger.warning(f"[abus_asr_faster_whisper.py] _download_model_robust - attempt {attempt} failed: {e}")
-                time.sleep(min(5 * attempt, 30))
+                wait = (10, 20, 30, 45, 60, 60, 90, 90)[min(attempt - 1, 7)]
+                logger.warning(f"[abus_asr_faster_whisper.py] _download_model_robust - attempt {attempt} failed, retry in {wait}s: {e}")
+                # Connexion coupée : on jette la connexion partagée de huggingface_hub pour en ouvrir une neuve
+                try:
+                    from huggingface_hub.utils import close_session
+                    close_session()
+                except Exception:
+                    pass
+                if progress is not None:
+                    progress(0, desc=f"Connection cut by the network, retrying in {wait}s ({attempt}/{attempts})...")
+                time.sleep(wait)
         raise last_error
         
 
