@@ -219,3 +219,62 @@ def _build_legacy(subs, synth, segments_folder, output_file, audio_format, progr
 
     combined_audio.export(output_file, format=audio_format)
     return report
+
+
+# ---------------------------------------------------------------------------
+# Répartition d'une traduction sur les sous-titres d'origine
+# ---------------------------------------------------------------------------
+import re as _re
+
+_SENTENCE_END = _re.compile(r'(?<=[.!?…»"])\s+(?=[«"A-ZÀ-ÖØ-Þ0-9])')
+
+
+def split_sentences(text: str):
+    """Découpe simple en phrases (ponctuation forte suivie d'une majuscule)."""
+    text = " ".join(text.split())
+    if not text:
+        return []
+    return [s.strip() for s in _SENTENCE_END.split(text) if s.strip()]
+
+
+def distribute_translation(source_texts, translated_units):
+    """
+    Pose des phrases traduites sur les sous-titres d'origine quand leur nombre diffère.
+
+    source_texts     : textes des sous-titres d'origine (dans l'ordre)
+    translated_units : lignes ou phrases traduites (dans l'ordre)
+    Renvoie une liste de même longueur que source_texts.
+
+    Principe : on compare la position de chaque phrase traduite dans le texte traduit
+    (en proportion des caractères) à la position des sous-titres dans le texte d'origine.
+    Chaque phrase va au sous-titre qui couvre le milieu de la phrase ; plusieurs phrases
+    peuvent se retrouver dans le même sous-titre, et un sous-titre peut rester vide
+    (il devient un silence). L'ordre est toujours respecté.
+    """
+    n = len(source_texts)
+    if n == 0:
+        return []
+    units = [u.strip() for u in translated_units if u and u.strip()]
+    if len(units) == n:
+        return units
+    if not units:
+        return [""] * n
+
+    src_len = [max(len(t.strip()), 1) for t in source_texts]
+    total_src = float(sum(src_len))
+    bounds, acc = [], 0.0
+    for length in src_len:
+        acc += length
+        bounds.append(acc / total_src)
+
+    tr_len = [len(u) for u in units]
+    total_tr = float(sum(tr_len))
+    result = [[] for _ in range(n)]
+    pos, idx = 0.0, 0
+    for unit, length in zip(units, tr_len):
+        middle = (pos + length / 2.0) / total_tr
+        pos += length
+        while idx < n - 1 and middle > bounds[idx]:
+            idx += 1
+        result[idx].append(unit)
+    return [" ".join(parts) for parts in result]

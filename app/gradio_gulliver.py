@@ -305,13 +305,25 @@ class GradioGulliver:
         if not lines:
             raise gr.Error(i18n("Paste the translated text first, one sentence per line."), duration=None)
 
+        # Une traduction collée au format sous-titres : on ne garde que le texte
+        pasted = "\n".join(lines)
+        if self._is_subtitle_format(pasted):
+            lines = [" ".join(e.plaintext.split()) for e in pysubs2.SSAFile.from_string(pasted) if e.text.strip()]
+
         subs = pysubs2.SSAFile.from_string(source_srt)
         events = [e for e in subs if e.text.strip()]
         if len(lines) != len(events):
-            raise gr.Error(f"{i18n('Line count mismatch')} : {len(events)} {i18n('subtitles')} / {len(lines)} {i18n('translated lines')}",
-                           duration=None)
-        for event, line in zip(events, lines):
-            event.text = line
+            # Nombre différent (DeepL a fusionné ou coupé des lignes) : on répartit automatiquement
+            units = [sentence for line in lines for sentence in split_sentences(line)]
+            texts = distribute_translation([e.plaintext for e in events], units)
+            gr.Info(f"{len(lines)} {i18n('translated lines')} → {len(events)} {i18n('subtitles')} : "
+                    + i18n("distributed automatically by position in the text. Check the result."), duration=15)
+        else:
+            texts = lines
+        for event, text in zip(events, texts):
+            event.text = text
+        # Les sous-titres restés vides deviennent des silences
+        subs.events = [e for e in subs.events if e.text.strip() or e not in events]
         return subs.to_string("srt")
 
     def _mix_dub(self, aidub_audio_file, source_audio_file, mixed_audio_file, audio_format):
