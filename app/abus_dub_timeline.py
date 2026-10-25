@@ -125,7 +125,7 @@ def build_dub_timeline(subs, synth, segments_folder: str, output_file: str, audi
         report = _build_meditation(subs, synth, segments_folder, output_file, audio_format, progress, opts)
 
     _last_report = report
-    logger.info(f"[abus_dub_timeline.py] build_dub_timeline - {report}")
+    logger.info(f"[abus_dub_timeline.py] build_dub_timeline - { {k: v for k, v in report.items() if k != 'placements'} }")
     return report
 
 
@@ -136,7 +136,8 @@ def _build_meditation(subs, synth, segments_folder, output_file, audio_format, p
 
     placements = []          # (position_ms, AudioSegment)
     cursor = 0               # fin de la dernière phrase posée
-    report = {"mode": "meditation", "lines": 0, "stretched": 0, "late": [], "failed": [], "max_late_ms": 0}
+    report = {"mode": "meditation", "lines": 0, "stretched": 0, "late": [], "failed": [], "max_late_ms": 0,
+              "placements": []}   # (début dans la piste FR, durée, début et fin du sous-titre d'origine) en ms
 
     for i in _iterate(len(subs), progress):
         line = subs[i]
@@ -169,6 +170,7 @@ def _build_meditation(subs, synth, segments_folder, output_file, audio_format, p
         report["max_late_ms"] = max(report["max_late_ms"], late_ms)
 
         placements.append((start, segment))
+        report["placements"].append((start, len(segment), line.start, line.end))
         cursor = start + len(segment)
         report["lines"] += 1
 
@@ -278,3 +280,81 @@ def distribute_translation(source_texts, translated_units):
             idx += 1
         result[idx].append(unit)
     return [" ".join(parts) for parts in result]
+
+
+
+# ---------------------------------------------------------------------------
+# Spatialisation : la voix traduite suit la position gauche/droite de la voix d'origine
+# ---------------------------------------------------------------------------
+import numpy as _np
+
+PAN_ANALYSIS_RATE = 16000
+
+
+def _read_stereo(path: str, rate: int):
+    """Lit un fichier audio en float32 stéréo (n, 2) via ffmpeg."""
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-i", path, "-f", "f32le", "-ac", "2",
+                          "-ar", str(rate), "-"], capture_output=True, check=True).stdout
+    return _np.frombuffer(raw, dtype=_np.float32).reshape(-1, 2)
+
+
+def pan_gains(reference, start_ms: int, end_ms: int, rate: int = PAN_ANALYSIS_RATE,
+              silence_db: float = -55.0, floor_db: float = -40.0):
+    """
+    Gains (gauche, droite) entre 0 et 1 qui reproduisent l'équilibre gauche/droite de la voix
+    d'origine sur [start_ms, end_ms]. Voix centrée -> (1, 1) ; voix dans l'oreille droite -> (~0, 1).
+    """
+    a = int(start_ms * rate / 1000)
+    b = int(end_ms * rate / 1000)
+    window = reference[max(a, 0):max(b, a + 1)]
+    if len(window) == 0:
+        return 1.0, 1.0
+    rms = _np.sqrt(_np.mean(window.astype(_np.float64) ** 2, axis=0))
+    loudest = float(rms.max())
+    if loudest <= 0 or 20 * _np.log10(loudest) < silence_db:
+        return 1.0, 1.0                     # pas de voix détectée : centre
+    gains = rms / loudest
+    floor = 10 ** (floor_db / 20)
+    gains = _np.where(gains < floor, 0.0, gains)
+    return float(gains[0]), float(gains[1])
+
+
+def apply_source_panning(voice_file: str, reference_file: str, placements, output_file: str,
+                         fade_ms: int = 15) -> list:
+    """
+    Recrée la piste voix en stéréo : chaque phrase reçoit les gains gauche/droite mesurés sur la
+    voix d'origine pendant le sous-titre correspondant. Renvoie la liste des gains appliqués.
+    """
+    reference = _read_stereo(reference_file, PAN_ANALYSIS_RATE)
+    voice = AudioSegment.from_file(voice_file)
+    rate = voice.frame_rate
+    samples = _np.array(voice.get_array_of_samples(), dtype=_np.float32).reshape(-1, voice.channels)
+    mono = samples.mean(axis=1)
+    gains_l = _np.ones(len(mono), dtype=_np.float32)
+    gains_r = _np.ones(len(mono), dtype=_np.float32)
+    fade = max(int(fade_ms * rate / 1000), 1)
+    applied = []
+    for pos, dur, src_start, src_end in placements:
+        gl, gr_ = pan_gains(reference, src_start, src_end)
+        applied.append((gl, gr_))
+        a = int(pos * rate / 1000)
+        b = min(int((pos + dur) * rate / 1000), len(mono))
+        if b <= a:
+            continue
+        gains_l[a:b] = gl
+        gains_r[a:b] = gr_
+        # petites rampes pour éviter un clic si deux phrases se touchent
+        for g, value in ((gains_l, gl), (gains_r, gr_)):
+            if a > 0:
+                ramp_a = max(a - fade, 0)
+                g[ramp_a:a] = _np.linspace(g[ramp_a], value, a - ramp_a, endpoint=False)
+    stereo = _np.stack([mono * gains_l, mono * gains_r], axis=1)
+    peak = float(_np.abs(stereo).max()) if len(stereo) else 0.0
+    limit = float(2 ** (8 * voice.sample_width - 1) - 1)
+    if peak > limit:
+        stereo *= limit / peak
+    dtype = {1: _np.int8, 2: _np.int16, 4: _np.int32}[voice.sample_width]
+    out = AudioSegment(stereo.astype(dtype).tobytes(), frame_rate=rate, sample_width=voice.sample_width, channels=2)
+    ext = os.path.splitext(output_file)[1].lstrip(".") or "wav"
+    out.export(output_file, format=ext)
+    return applied

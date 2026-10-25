@@ -91,6 +91,7 @@ class UserConfig:
             "dub_demucs_model": "htdemucs_ft",
             "dub_voice_gain_db": 0.0,
             "dub_bed_gain_db": 0.0,
+            "dub_follow_pan": True,
             "deepl_api_key": "",
             "deepl_formality": "prefer_more",
             }

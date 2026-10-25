@@ -261,19 +261,33 @@ class GradioGulliver:
         if model == "none":
             return None
 
+        inst_audio_file, _ = self._demucs_cached(source_audio_file, model)
+        return inst_audio_file
+
+    def _demucs_cached(self, source_audio_file, model):
+        """Séparation fond / voix d'origine, calculée une seule fois par morceau et par modèle."""
         if not hasattr(self, "_bed_cache"):
             self._bed_cache = {}
         key = (source_audio_file, model)
         cached = self._bed_cache.get(key)
-        if cached and os.path.exists(cached):
+        if cached and all(os.path.exists(f) for f in cached):
             return cached
-
         if model == "htdemucs":
-            inst_audio_file, _ = self._demucs_htdemucs(source_audio_file)
+            result = self._demucs_htdemucs(source_audio_file)
         else:
-            inst_audio_file, _ = self._demucs_htdemucs_ft(source_audio_file)
-        self._bed_cache[key] = inst_audio_file
-        return inst_audio_file
+            result = self._demucs_htdemucs_ft(source_audio_file)
+        self._bed_cache[key] = result
+        return result
+
+    def _pan_reference(self, source_audio_file):
+        """Voix d'origine isolée (Demucs) si on l'a déjà, sinon le morceau d'origine."""
+        model = self.user_config.get("dub_demucs_model", "htdemucs_ft")
+        for (src, _model), files in getattr(self, "_bed_cache", {}).items():
+            if src == source_audio_file and files and os.path.exists(files[1]):
+                return files[1]
+        if model in ("htdemucs", "htdemucs_ft") and not getattr(self, "dub_bed_file", None):
+            return self._demucs_cached(source_audio_file, model)[1]
+        return source_audio_file
 
     def gradio_set_deepl_key(self, key):
         key = (key or "").strip()
@@ -328,6 +342,21 @@ class GradioGulliver:
 
     def _mix_dub(self, aidub_audio_file, source_audio_file, mixed_audio_file, audio_format):
         bed = self._dub_bed(source_audio_file)
+
+        # Spatialisation : la voix française suit la position gauche/droite de la voix d'origine
+        placements = get_last_report().get("placements") or []
+        if self.user_config.get("dub_follow_pan", True) and placements:
+            try:
+                panned_file = path_add_postfix(aidub_audio_file, "_spatial")
+                applied = apply_source_panning(aidub_audio_file, self._pan_reference(source_audio_file),
+                                               placements, panned_file)
+                aidub_audio_file = panned_file
+                off_center = sum(1 for gl, gr_ in applied if abs(gl - gr_) > 0.3)
+                logger.info(f"[gradio_gulliver.py] _mix_dub - spatialisation : {off_center}/{len(applied)} phrases hors centre")
+            except Exception as e:
+                logger.error(f"[gradio_gulliver.py] _mix_dub - spatialisation impossible : {e}")
+                gr.Warning(i18n("Could not follow the original left/right placement; the voice stays centered."), duration=10)
+
         voice_gain = float(self.user_config.get("dub_voice_gain_db", 0.0))
         bed_gain = float(self.user_config.get("dub_bed_gain_db", 0.0))
         if bed:

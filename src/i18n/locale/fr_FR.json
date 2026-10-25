@@ -82,5 +82,7 @@
     "Informal (tu)": "Tutoiement (tu)",
     "Translated with DeepL.": "Traduit avec DeepL.",
     "Falling back to the free services.": "Passage aux services gratuits.",
-    "distributed automatically by position in the text. Check the result.": "réparties automatiquement selon leur position dans le texte. Vérifie le résultat."
+    "distributed automatically by position in the text. Check the result.": "réparties automatiquement selon leur position dans le texte. Vérifie le résultat.",
+    "Voice follows the original left/right placement (binaural)": "La voix suit la position gauche/droite d'origine (binaural)",
+    "Could not follow the original left/right placement; the voice stays centered.": "Impossible de suivre la position gauche/droite d'origine : la voix reste au centre."
 }
