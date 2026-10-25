@@ -71,13 +71,44 @@ class AbusSpacy:
         if key not in cls._nlp_models:
             model_dict = cls.SUPPORTED_LANGUAGES.get(lang, cls.SUPPORTED_LANGUAGES['en'])
             model_name = model_dict.get(model_size, model_dict['sm'])
-            try:
-                cls._nlp_models[key] = spacy.load(model_name, disable=["tagger", "ner"])
-            except OSError:
-                download(model_name)
-                cls._nlp_models[key] = spacy.load(model_name, disable=["tagger", "ner"])
-            cls._nlp_models[key].add_pipe('sentencizer', first=True)
+            nlp = cls._load_or_fallback(lang, model_name, model_dict)
+            if 'sentencizer' not in nlp.pipe_names:
+                nlp.add_pipe('sentencizer', first=True)
+            cls._nlp_models[key] = nlp
         return cls._nlp_models[key]
+
+    @classmethod
+    def _load_or_fallback(cls, lang: str, model_name: str, model_dict: dict) -> spacy.language.Language:
+        """
+        Modèle demandé si installé ; sinon un autre modèle déjà installé pour la langue
+        (en_core_web_sm est toujours là) ; sinon téléchargement ; sinon un modèle vide
+        avec découpage par ponctuation. Ne fait jamais planter l'application :
+        spacy.cli.download appelle sys.exit() en cas d'échec réseau (github.com bloqué...).
+        """
+        try:
+            return spacy.load(model_name, disable=["tagger", "ner"])
+        except OSError:
+            pass
+        for other in dict.fromkeys(model_dict.values()):
+            if other == model_name:
+                continue
+            try:
+                nlp = spacy.load(other, disable=["tagger", "ner"])
+                print(f"[abus_nlp_spacy.py] {model_name} not installed, using {other}")
+                return nlp
+            except OSError:
+                continue
+        try:
+            download(model_name)
+            return spacy.load(model_name, disable=["tagger", "ner"])
+        except BaseException as e:   # SystemExit sur échec de pip
+            if isinstance(e, KeyboardInterrupt):
+                raise
+            print(f"[abus_nlp_spacy.py] could not download {model_name} ({e!r}), using a blank '{lang}' pipeline")
+        try:
+            return spacy.blank(lang)
+        except Exception:
+            return spacy.blank("xx")
 
     @classmethod
     def detect_language(cls, text: str) -> str:
