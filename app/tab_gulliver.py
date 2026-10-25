@@ -123,6 +123,8 @@ def gulliver_tab(user_config: UserConfig):
                                            type="filepath", file_count="single", file_types=['audio'])
                     dub_follow_pan = gr.Checkbox(label=i18n("Voice follows the original left/right placement (binaural)"),
                                                  value=user_config.get("dub_follow_pan", True))
+                    dub_match_level = gr.Checkbox(label=i18n("Voice volume matched to the original, sentence by sentence"),
+                                                  value=user_config.get("dub_match_level", True))
                     dub_voice_gain = gr.Slider(-12, 12, step=0.5, value=user_config.get("dub_voice_gain_db", 0.0), label=i18n("Voice volume (dB)"))
                     dub_bed_gain = gr.Slider(-24, 6, step=0.5, value=user_config.get("dub_bed_gain_db", 0.0), label=i18n("Background volume (dB)"))
 
@@ -321,3 +323,4 @@ def gulliver_tab(user_config: UserConfig):
     deepl_key_textbox.change(gulliver.gradio_set_deepl_key, inputs=[deepl_key_textbox])
     deepl_formality_radio.change(gulliver.gradio_set_deepl_formality, inputs=[deepl_formality_radio])
     dub_follow_pan.change(lambda v: user_config.set("dub_follow_pan", bool(v)), inputs=[dub_follow_pan])
+    dub_match_level.change(lambda v: user_config.set("dub_match_level", bool(v)), inputs=[dub_match_level])

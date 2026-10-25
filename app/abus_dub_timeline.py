@@ -319,8 +319,21 @@ def pan_gains(reference, start_ms: int, end_ms: int, rate: int = PAN_ANALYSIS_RA
     return float(gains[0]), float(gains[1])
 
 
+def _active_rms(x, rate: int, floor_db: float = -50.0) -> float:
+    """RMS calculé seulement sur les passages où l'on parle (trames de 50 ms au-dessus du seuil)."""
+    step = max(int(rate * 0.05), 1)
+    if x.ndim > 1:
+        x = x.max(axis=1) if x.shape[1] > 1 else x[:, 0]
+    frames = [x[i:i + step] for i in range(0, len(x) - step + 1, step)]
+    values = [float(_np.sqrt(_np.mean(f.astype(_np.float64) ** 2))) for f in frames]
+    floor = 10 ** (floor_db / 20)
+    values = [v for v in values if v > floor]
+    return float(_np.sqrt(_np.mean(_np.square(values)))) if values else 0.0
+
+
 def apply_source_panning(voice_file: str, reference_file: str, placements, output_file: str,
-                         fade_ms: int = 15) -> list:
+                         fade_ms: int = 15, match_level: bool = False,
+                         min_gain_db: float = -15.0, max_gain_db: float = 6.0) -> list:
     """
     Recrée la piste voix en stéréo : chaque phrase reçoit les gains gauche/droite mesurés sur la
     voix d'origine pendant le sous-titre correspondant. Renvoie la liste des gains appliqués.
@@ -334,13 +347,25 @@ def apply_source_panning(voice_file: str, reference_file: str, placements, outpu
     gains_r = _np.ones(len(mono), dtype=_np.float32)
     fade = max(int(fade_ms * rate / 1000), 1)
     applied = []
+    full_scale = float(2 ** (8 * voice.sample_width - 1))
     for pos, dur, src_start, src_end in placements:
         gl, gr_ = pan_gains(reference, src_start, src_end)
-        applied.append((gl, gr_))
         a = int(pos * rate / 1000)
         b = min(int((pos + dur) * rate / 1000), len(mono))
         if b <= a:
+            applied.append((gl, gr_))
             continue
+        if match_level:
+            # même niveau que la voix d'origine pendant ce passage (la voix suit les nuances : plus douce, plus forte)
+            ra = int(src_start * PAN_ANALYSIS_RATE / 1000)
+            rb = int(src_end * PAN_ANALYSIS_RATE / 1000)
+            target = _active_rms(reference[ra:rb], PAN_ANALYSIS_RATE)
+            current = _active_rms(mono[a:b] / full_scale, rate)
+            if target > 0 and current > 0:
+                level = target / current
+                level = min(max(level, 10 ** (min_gain_db / 20)), 10 ** (max_gain_db / 20))
+                gl, gr_ = gl * level, gr_ * level
+        applied.append((gl, gr_))
         gains_l[a:b] = gl
         gains_r[a:b] = gr_
         # petites rampes pour éviter un clic si deux phrases se touchent

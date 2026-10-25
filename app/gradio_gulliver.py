@@ -414,9 +414,10 @@ class GradioGulliver:
             try:
                 panned_file = path_add_postfix(aidub_audio_file, "_spatial")
                 applied = apply_source_panning(aidub_audio_file, self._pan_reference(source_audio_file),
-                                               placements, panned_file)
+                                               placements, panned_file,
+                                               match_level=bool(self.user_config.get("dub_match_level", True)))
                 aidub_audio_file = panned_file
-                off_center = sum(1 for gl, gr_ in applied if abs(gl - gr_) > 0.3)
+                off_center = sum(1 for gl, gr_ in applied if abs(gl - gr_) > 0.3 * max(gl, gr_, 1e-6))
                 logger.info(f"[gradio_gulliver.py] _mix_dub - spatialisation : {off_center}/{len(applied)} phrases hors centre")
             except Exception as e:
                 logger.error(f"[gradio_gulliver.py] _mix_dub - spatialisation impossible : {e}")
