@@ -71,5 +71,8 @@
     "subtitles": "sous-titres",
     "translated lines": "lignes traduites",
     "1. Extract the original text": "1. Extraire le texte d'origine",
-    "2. Place on the original timings": "2. Poser sur les timings d'origine"
+    "2. Place on the original timings": "2. Poser sur les timings d'origine",
+    "No free translation service is reachable from this network (Google and MyMemory refused). Use the DeepL route instead: button 1, translate in DeepL, paste, button 2.": "Aucun service de traduction gratuit n'est joignable depuis ce réseau (Google et MyMemory ont refusé). Passe par DeepL : bouton 1, traduction dans DeepL, coller, bouton 2 (panneau Méditation).",
+    "Google Translate refused the requests: MyMemory was used instead. Proofread the translation.": "Google Traduction a refusé les demandes : MyMemory a été utilisé à la place. Relis la traduction.",
+    "Some lines could not be translated and were kept in the original language. The translation service may be rate-limited by your network - please try again later.": "Certaines lignes n'ont pas pu être traduites et sont restées en anglais. Corrige-les à la main ou passe par DeepL (boutons 1 et 2 du panneau Méditation)."
 }
