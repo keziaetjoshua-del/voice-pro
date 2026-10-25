@@ -193,6 +193,10 @@ class GradioGulliver:
             self.fm.set_subtitles(subtitles, whisper_language, source_audio) 
             srt_file = self.fm.get_subtitle('.srt')
             srt_string = self._read_file(srt_file)
+            try:
+                self._last_transcription_end_ms = max((e.end for e in pysubs2.SSAFile.from_string(srt_string) if e.text.strip()), default=0)
+            except Exception:
+                self._last_transcription_end_ms = 0
             logger.debug(f'srt_file = {srt_file}, self.source_file = {self.source_file}')
             
             if(self.has_video and ffmpeg_browser_compatible(self.source_file)):
@@ -243,6 +247,21 @@ class GradioGulliver:
 
 
     # Doublage « méditation » : réglages, fond sonore, mixage
+    def _check_translation_covers_source(self, translation_text):
+        """Refuse une traduction qui s'arrête bien avant la fin de la transcription en cours (ancien essai resté dans la case)."""
+        source_end = getattr(self, "_last_transcription_end_ms", 0)
+        if not source_end or not self._is_subtitle_format(translation_text or ""):
+            return
+        try:
+            events = [e for e in pysubs2.SSAFile.from_string(translation_text) if e.text.strip()]
+        except Exception:
+            return
+        translated_end = max((e.end for e in events), default=0)
+        if translated_end < 0.6 * source_end:
+            raise gr.Error(f"{i18n('The translated subtitles stop at')} {translated_end // 60000}:{translated_end // 1000 % 60:02d}, "
+                           f"{i18n('but the transcription goes to')} {source_end // 60000}:{source_end // 1000 % 60:02d}. "
+                           + i18n("Click Translate again for this file before generating the voice."), duration=None)
+
     def _apply_dub_options(self):
         set_dub_options(
             timing_mode=self.user_config.get("dub_timing_mode", "meditation"),
@@ -272,12 +291,58 @@ class GradioGulliver:
         cached = self._bed_cache.get(key)
         if cached and all(os.path.exists(f) for f in cached):
             return cached
+        found = self._find_existing_stems(source_audio_file, model)
+        if found:
+            logger.info(f"[gradio_gulliver.py] _demucs_cached - séparation déjà faite, réutilisée : {found[0]}")
+            gr.Info(i18n("Demucs separation already done for this track: reused (no new calculation)."), duration=10)
+            self._bed_cache[key] = found
+            return found
         if model == "htdemucs":
             result = self._demucs_htdemucs(source_audio_file)
         else:
             result = self._demucs_htdemucs_ft(source_audio_file)
         self._bed_cache[key] = result
         return result
+
+    @staticmethod
+    def _fingerprint(path):
+        import hashlib
+        size = os.path.getsize(path)
+        h = hashlib.sha1(str(size).encode())
+        with open(path, "rb") as f:
+            h.update(f.read(1 << 20))
+            if size > (1 << 20):
+                f.seek(max(size - (1 << 20), 0))
+                h.update(f.read(1 << 20))
+        return h.hexdigest()
+
+    def _find_existing_stems(self, source_audio_file, model):
+        """Cherche dans workspace/ une séparation Demucs déjà faite pour le même morceau (même contenu)."""
+        try:
+            target = self._fingerprint(source_audio_file)
+            root = path_workspace_folder()
+            for folder in os.listdir(root):
+                folder_path = os.path.join(root, folder)
+                if not os.path.isdir(folder_path):
+                    continue
+                for name in os.listdir(folder_path):
+                    marker = f"_{model}_inst."
+                    if marker not in name:
+                        continue
+                    base, ext = name.split(marker)
+                    inst = os.path.join(folder_path, name)
+                    vocal = os.path.join(folder_path, f"{base}_{model}_vocal.{ext}")
+                    if not os.path.exists(vocal):
+                        continue
+                    for candidate in os.listdir(folder_path):
+                        cand_path = os.path.join(folder_path, candidate)
+                        if os.path.splitext(candidate)[0] == base and os.path.isfile(cand_path) \
+                                and os.path.getsize(cand_path) == os.path.getsize(source_audio_file) \
+                                and self._fingerprint(cand_path) == target:
+                            return inst, vocal
+        except Exception as e:
+            logger.warning(f"[gradio_gulliver.py] _find_existing_stems - {e}")
+        return None
 
     def _pan_reference(self, source_audio_file):
         """Voix d'origine isolée (Demucs) si on l'a déjà, sinon le morceau d'origine."""
@@ -475,6 +540,7 @@ class GradioGulliver:
                     semitones = {semitones}, speed_factor = {speed_factor}, volume_factor = {volume_factor}, audio_format = {audio_format}")
         
         self._apply_dub_options()
+        self._check_translation_covers_source(translation_text)
         if len(translation_text) < 1:
             logger.warning(f"[gradio_gulliver.py] gradio_edge_dubbing - no actions")
             return None, None, self.fm.get_all_files() 
@@ -599,6 +665,7 @@ class GradioGulliver:
                     model_choice = {model_choice}, speed_factor = {speed_factor}, audio_format = {audio_format}")
         
         self._apply_dub_options()
+        self._check_translation_covers_source(translation_text)
         if len(translation_text) < 1:
             logger.warning(f"[gradio_gulliver.py] gradio_f5_dubbing_single - no actions")
             return None, None, self.fm.get_all_files() 
@@ -668,6 +735,7 @@ class GradioGulliver:
                         celeb_name, celeb_audio, celeb_transcript, 
                         mode_choice, speed_factor, audio_format: str):
         self._apply_dub_options()
+        self._check_translation_covers_source(translation_text)
         if len(translation_text) < 1:
             logger.warning(f"[gradio_gulliver.py] gradio_f5_dubbing_single - no actions")
             return None, None, self.fm.get_all_files() 
@@ -742,6 +810,7 @@ class GradioGulliver:
                     speed_factor = {speed_factor}, audio_format = {audio_format}")
         
         self._apply_dub_options()
+        self._check_translation_covers_source(translation_text)
         if len(translation_text) < 1:
             logger.warning(f"[gradio_gulliver.py] gradio_kokoro_dubbing - no actions")
             return None, None, self.fm.get_all_files() 

@@ -84,5 +84,9 @@
     "Falling back to the free services.": "Passage aux services gratuits.",
     "distributed automatically by position in the text. Check the result.": "réparties automatiquement selon leur position dans le texte. Vérifie le résultat.",
     "Voice follows the original left/right placement (binaural)": "La voix suit la position gauche/droite d'origine (binaural)",
-    "Could not follow the original left/right placement; the voice stays centered.": "Impossible de suivre la position gauche/droite d'origine : la voix reste au centre."
+    "Could not follow the original left/right placement; the voice stays centered.": "Impossible de suivre la position gauche/droite d'origine : la voix reste au centre.",
+    "The translated subtitles stop at": "Les sous-titres traduits s'arrêtent à",
+    "but the transcription goes to": "alors que la transcription va jusqu'à",
+    "Click Translate again for this file before generating the voice.": "Clique d'abord sur « Traduire » pour ce morceau-ci, puis relance la voix.",
+    "Demucs separation already done for this track: reused (no new calculation).": "Séparation Demucs déjà faite pour ce morceau : réutilisée (pas de nouveau calcul)."
 }

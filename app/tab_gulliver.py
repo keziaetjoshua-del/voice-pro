@@ -191,7 +191,9 @@ def gulliver_tab(user_config: UserConfig):
     # Media Upload                        
     submit_button.click(gulliver.gradio_upload_source,
                         inputs=[media_file, mic_audio, url_text, youtube_quality_radio, audio_format_radio],
-                        outputs=[input_video, input_audio, dubbing_files])
+                        outputs=[input_video, input_audio, dubbing_files]).then(
+                        # Nouveau morceau : on vide l'ancienne transcription / traduction pour ne pas les réutiliser par erreur
+                        lambda: ("", "", "", None), outputs=[transcription_textbox, translation_textbox, french_lines_textbox, dubbing_audio])
     clear_button.add([input_video, input_audio, transcription_textbox, dubbing_video, dubbing_audio, translation_textbox])
 
     
@@ -203,7 +205,8 @@ def gulliver_tab(user_config: UserConfig):
                     outputs=[whisper_model_dropdown, whisper_language_dropdown, compute_type_dropdown, denoise_level])
     whisper_button.click(gulliver.gradio_whisper, 
                             inputs=[asr_engine_radio, whisper_model_dropdown, whisper_language_dropdown, compute_type_dropdown, denoise_level], 
-                            outputs=[input_video, input_audio, transcription_textbox, dubbing_files])
+                            outputs=[input_video, input_audio, transcription_textbox, dubbing_files]).then(
+                            lambda: ("", ""), outputs=[translation_textbox, french_lines_textbox])
     
     # Folder
     workspace_button.click(gulliver.gradio_workspace_folder)
