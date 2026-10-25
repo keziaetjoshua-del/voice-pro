@@ -18,6 +18,7 @@ from app.abus_asr_whisper import *
 from app.abus_asr_whisper_timestamped import *
 
 from app.abus_translate_deep import *
+from app.abus_translate_deepl import set_deepl_key
 from app.abus_translate_azure import *
 
 from app.abus_voice_ms import *
@@ -274,6 +275,15 @@ class GradioGulliver:
         self._bed_cache[key] = inst_audio_file
         return inst_audio_file
 
+    def gradio_set_deepl_key(self, key):
+        key = (key or "").strip()
+        self.user_config.set("deepl_api_key", key)
+        set_deepl_key(key)
+
+    def gradio_set_deepl_formality(self, formality):
+        self.user_config.set("deepl_formality", formality)
+        DeepTranslator.formality = formality
+
     def gradio_set_bed_file(self, bed_file):
         """Piste de fond sans voix fournie par l'utilisateur (non mémorisée entre deux sessions)."""
         self.dub_bed_file = bed_file if bed_file else None
@@ -338,6 +348,8 @@ class GradioGulliver:
             logger.warning(f"[gradio_gulliver.py] gradio_translate - no actions")
             return None, None, None, self.fm.get_all_files() 
         
+        set_deepl_key(self.user_config.get("deepl_api_key", ""))
+        DeepTranslator.formality = self.user_config.get("deepl_formality", "prefer_more")
         self.user_config.set("translate_source_language", source_lang)            
         self.user_config.set("translate_target_language", target_lang)    
 

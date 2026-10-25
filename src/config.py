@@ -91,6 +91,8 @@ class UserConfig:
             "dub_demucs_model": "htdemucs_ft",
             "dub_voice_gain_db": 0.0,
             "dub_bed_gain_db": 0.0,
+            "deepl_api_key": "",
+            "deepl_formality": "prefer_more",
             }
         self.user_config = self.load_user_config()
 

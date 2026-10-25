@@ -87,6 +87,13 @@ def gulliver_tab(user_config: UserConfig):
                 gr.HTML(f'<center><h4>{i18n("Translation")}</h4></center>')
                 source_language_dropdown = gr.Dropdown(label=i18n("Source Language"), choices=gulliver.gradio_translate_languages(), value=user_config.get("translate_source_language", "English"))
                 translate_language_dropdown = gr.Dropdown(label=i18n("Translated Language"), choices=gulliver.gradio_translate_languages(), value=user_config.get("translate_target_language", "English"))
+                deepl_key_textbox = gr.Textbox(label=i18n("DeepL API key (free)"), type="password",
+                                               value=user_config.get("deepl_api_key", ""),
+                                               placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx:fx",
+                                               info=i18n("Optional. With a key, Translate uses DeepL (500,000 characters per month free)."))
+                deepl_formality_radio = gr.Radio(label=i18n("Form of address"),
+                                                 choices=[(i18n("Formal (vous)"), "prefer_more"), (i18n("Informal (tu)"), "prefer_less")],
+                                                 value=user_config.get("deepl_formality", "prefer_more"))
             with gr.Row():
                 language_detection_button = gr.Button(value=i18n("Language Detection"))                    
                 translate_button = gr.Button(value=i18n("Translate"), variant="primary")              
@@ -306,3 +313,5 @@ def gulliver_tab(user_config: UserConfig):
     dub_voice_gain.change(lambda v: user_config.set("dub_voice_gain_db", float(v)), inputs=[dub_voice_gain])
     dub_bed_gain.change(lambda v: user_config.set("dub_bed_gain_db", float(v)), inputs=[dub_bed_gain])
     dub_bed_file.change(gulliver.gradio_set_bed_file, inputs=[dub_bed_file])
+    deepl_key_textbox.change(gulliver.gradio_set_deepl_key, inputs=[deepl_key_textbox])
+    deepl_formality_radio.change(gulliver.gradio_set_deepl_formality, inputs=[deepl_formality_radio])

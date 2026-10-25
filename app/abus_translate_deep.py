@@ -3,6 +3,7 @@ import pysubs2
 import re
 import time
 from deep_translator import GoogleTranslator, MyMemoryTranslator
+from app.abus_translate_deepl import DeepLTranslator, DeepLError, deepl_available
 
 from app.abus_genuine import *
 from app.abus_path import *
@@ -97,6 +98,25 @@ class DeepTranslator:
         return None
 
 
+    formality = "prefer_more"   # vouvoiement par défaut (méditations guidées)
+
+    def _translate_events_deepl(self, subs, source_code, target_code) -> bool:
+        """Traduit tous les sous-titres avec DeepL (si une clé est configurée). Renvoie False pour passer au plan B."""
+        if not deepl_available():
+            return False
+        events = [e for e in subs if e.text]
+        try:
+            translated = DeepLTranslator(source_code, target_code, DeepTranslator.formality).translate_many(
+                [e.plaintext for e in events])
+        except DeepLError as e:
+            logger.error(f"[abus_translate_deep.py] DeepL failed: {e}")
+            gr.Warning(f"DeepL : {e}. " + i18n("Falling back to the free services."), duration=15)
+            return False
+        for event, text in zip(events, translated):
+            event.plaintext = text
+        gr.Info(i18n("Translated with DeepL."), duration=8)
+        return True
+
     def _code_to_name(self) -> dict:
         return {code: name for name, code in self.languages_dict.items()}
 
@@ -131,6 +151,15 @@ class DeepTranslator:
         sentences = AbusText.split_into_sentences(text, use_punctuation)
         sentences = sentences
         
+        if deepl_available():
+            try:
+                translated = DeepLTranslator(source_code, target_code, DeepTranslator.formality).translate_many(sentences)
+                gr.Info(i18n("Translated with DeepL."), duration=8)
+                return ' '.join(translated)
+            except DeepLError as e:
+                logger.error(f"[abus_translate_deep.py] translate_text - DeepL failed: {e}")
+                gr.Warning(f"DeepL : {e}. " + i18n("Falling back to the free services."), duration=15)
+
         translated_sentences = []
         failed_count = 0
 
@@ -165,6 +194,13 @@ class DeepTranslator:
         target_code = self.get_language_code(target_lang)
 
         
+        # Load subtitles using pysubs2
+        full_subs = pysubs2.load(tts_source_file)
+        if self._translate_events_deepl(full_subs, source_code, target_code):
+            full_subs.save(output_file_path)
+            cmd_delete_file(tts_source_file)
+            return
+
         translator = _FallbackTranslator(source_code, target_code, self._code_to_name())
         logger.debug(f"[abus_translate_deep.py] translate_file {source_code}: {subtitle_file_path} -> {target_code}: {output_file_path}")
 
