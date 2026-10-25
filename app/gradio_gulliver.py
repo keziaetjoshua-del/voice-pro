@@ -9,6 +9,7 @@ from app.abus_path import *
 from app.abus_ffmpeg import *
 from app.abus_demucs import *
 from app.abus_dub_timeline import *
+from app.abus_binaural import restore_binaural
 from app.abus_genuine import *
 from app.abus_files import *
 
@@ -281,6 +282,20 @@ class GradioGulliver:
             return None
 
         inst_audio_file, _ = self._demucs_cached(source_audio_file, model)
+        if not self.user_config.get("dub_restore_binaural", True):
+            return inst_audio_file
+        # Sons binauraux : on remet au niveau de l'original les sons purs que Demucs a affaiblis
+        restored = path_add_postfix(inst_audio_file, "_binaural")
+        if os.path.exists(restored) and os.path.getmtime(restored) >= os.path.getmtime(inst_audio_file):
+            return restored
+        try:
+            stats = {}
+            if restore_binaural(inst_audio_file, source_audio_file, restored, stats):
+                logger.info(f"[gradio_gulliver.py] _dub_bed - sons binauraux restaurés : {stats}")
+                return restored
+        except Exception as e:
+            logger.error(f"[gradio_gulliver.py] _dub_bed - restauration binaurale impossible : {e}")
+            gr.Warning(i18n("Binaural restoration failed; the Demucs background is used as is."), duration=10)
         return inst_audio_file
 
     def _demucs_cached(self, source_audio_file, model):

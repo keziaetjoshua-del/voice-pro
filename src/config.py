@@ -92,6 +92,7 @@ class UserConfig:
             "dub_voice_gain_db": 0.0,
             "dub_bed_gain_db": 0.0,
             "dub_follow_pan": True,
+            "dub_restore_binaural": True,
             "dub_match_level": True,
             "deepl_api_key": "",
             "deepl_formality": "prefer_more",

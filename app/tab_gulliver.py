@@ -121,6 +121,8 @@ def gulliver_tab(user_config: UserConfig):
                                              value=user_config.get("dub_demucs_model", "htdemucs_ft"))
                     dub_bed_file = gr.File(label=i18n("Original background without voice (optional, replaces Demucs)"),
                                            type="filepath", file_count="single", file_types=['audio'])
+                    dub_restore_binaural = gr.Checkbox(label=i18n("Restore binaural tones weakened by Demucs"),
+                                                       value=user_config.get("dub_restore_binaural", True))
                     dub_follow_pan = gr.Checkbox(label=i18n("Voice follows the original left/right placement (binaural)"),
                                                  value=user_config.get("dub_follow_pan", True))
                     dub_match_level = gr.Checkbox(label=i18n("Voice volume matched to the original, sentence by sentence"),
@@ -324,3 +326,4 @@ def gulliver_tab(user_config: UserConfig):
     deepl_formality_radio.change(gulliver.gradio_set_deepl_formality, inputs=[deepl_formality_radio])
     dub_follow_pan.change(lambda v: user_config.set("dub_follow_pan", bool(v)), inputs=[dub_follow_pan])
     dub_match_level.change(lambda v: user_config.set("dub_match_level", bool(v)), inputs=[dub_match_level])
+    dub_restore_binaural.change(lambda v: user_config.set("dub_restore_binaural", bool(v)), inputs=[dub_restore_binaural])

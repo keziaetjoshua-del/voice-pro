@@ -89,5 +89,7 @@
     "but the transcription goes to": "alors que la transcription va jusqu'à",
     "Click Translate again for this file before generating the voice.": "Clique d'abord sur « Traduire » pour ce morceau-ci, puis relance la voix.",
     "Demucs separation already done for this track: reused (no new calculation).": "Séparation Demucs déjà faite pour ce morceau : réutilisée (pas de nouveau calcul).",
-    "Voice volume matched to the original, sentence by sentence": "Volume de la voix calé sur l'original, phrase par phrase"
+    "Voice volume matched to the original, sentence by sentence": "Volume de la voix calé sur l'original, phrase par phrase",
+    "Restore binaural tones weakened by Demucs": "Restaurer les sons binauraux affaiblis par Demucs",
+    "Binaural restoration failed; the Demucs background is used as is.": "La restauration binaurale a échoué : le fond Demucs est utilisé tel quel."
 }
